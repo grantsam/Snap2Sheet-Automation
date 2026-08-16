@@ -32,7 +32,7 @@ Each completed 6-photo report appends a structured row to your worksheet:
 
 | No. | Tanggal | Nama Pelanggan | Alamat | Nomor Registrasi | Berita Acara | Isometris | Dokumentasi 1 | Dokumentasi 2 | Dokumentasi 3 | Dokumentasi 4 |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| 1 | 2026-08-16 | grantl. Mawar No. 12 | 1234 gr`=IMAGE(...)` | `=IMAGE(...)` | `=IMAGE(...)` | `=IMAGE(...)` | `=IMAGE(...)` | `=IMAGE(...)` |
+| 1 | 2026-08-16 | Grant | Jl. Mawar No. 12 | 1234 | `=IMAGE(...)` | `=IMAGE(...)` | `=IMAGE(...)` | `=IMAGE(...)` | `=IMAGE(...)` | `=IMAGE(...)` |
 
 > *Note: Drive links and image formulas use your authenticated Google credentials. Access remains secure and private.*
 
@@ -111,7 +111,7 @@ Field technicians simply select **6 photos in WhatsApp** and send them in one of
    ```text
    1234 grant
    ```
-   *(or `0000 minz ( 1234 grant/ `1234 grant
+   *(or `0000 minz ( 1234 grant )` / `1234 - Grant`)*
 3. Send! The bot automatically buffers the photos, uploads them to Google Drive, appends the row to Google Sheets, and logs the success in the Dashboard.
 
 ### Method B (Photos First, Text Follows)
