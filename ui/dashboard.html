@@ -1,0 +1,1466 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Snap2Sheet — Automation Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- QR Code Generator Lib -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  darkMode: 'class',
+  theme: {
+    extend: {
+      colors: {
+        border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
+        ring: 'hsl(var(--ring))',
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        secondary: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        destructive: {
+          DEFAULT: 'hsl(var(--destructive))',
+          foreground: 'hsl(var(--destructive-foreground))',
+        },
+        muted: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        accent: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
+        },
+        popover: {
+          DEFAULT: 'hsl(var(--popover))',
+          foreground: 'hsl(var(--popover-foreground))',
+        },
+        card: {
+          DEFAULT: 'hsl(var(--card))',
+          foreground: 'hsl(var(--card-foreground))',
+        },
+      },
+      borderRadius: {
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)',
+      },
+      fontFamily: {
+        sans: ['Geist', 'system-ui', 'sans-serif'],
+        mono: ['Geist Mono', 'monospace'],
+      },
+    },
+  },
+}
+</script>
+
+<style>
+/* ── shadcn Zinc Dark Theme CSS Variables ── */
+:root {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 0 0% 98%;
+  --primary-foreground: 240 5.9% 10%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 240 4.9% 83.9%;
+  --radius: 0.5rem;
+}
+
+body {
+  font-family: 'Geist', system-ui, -apple-system, sans-serif;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Spinner Animation */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Custom Scrollbar for DevTools Console */
+.custom-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 9999px;
+}
+.custom-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
+
+/* Hide scrollbar for clean tabs */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>
+</head>
+<body class="min-h-screen bg-background text-foreground flex antialiased selection:bg-zinc-800 selection:text-zinc-100 overflow-x-hidden">
+
+<div class="flex w-full min-h-screen relative">
+
+  <!-- ── Mobile Backdrop Overlay ── -->
+  <div id="sidebar-backdrop" onclick="toggleMobileSidebar()" class="fixed inset-0 bg-black/70 backdrop-blur-xs z-30 hidden md:hidden transition-opacity"></div>
+
+  <!-- ── Sidebar ── -->
+  <aside id="sidebar" class="w-64 border-r border-border bg-card flex flex-col fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out -translate-x-full md:translate-x-0 shadow-xl md:shadow-none">
+    <!-- Brand -->
+    <div class="h-14 border-b border-border px-5 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-md bg-zinc-100 text-zinc-950 flex items-center justify-center font-bold text-xs shadow-sm">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <div>
+          <div class="text-sm font-semibold tracking-tight text-foreground">Snap2Sheet</div>
+          <div class="text-[11px] text-muted-foreground font-mono">Automation Hub</div>
+        </div>
+      </div>
+      <!-- Mobile Close -->
+      <button onclick="toggleMobileSidebar()" class="md:hidden p-1 rounded text-muted-foreground hover:text-foreground" aria-label="Close sidebar">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Nav Items -->
+    <div class="flex-1 px-3 py-4 space-y-1">
+      <div class="px-2 py-1.5 text-[11px] font-medium tracking-wider uppercase text-muted-foreground/70">Overview</div>
+      
+      <button class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-foreground bg-accent transition-colors" data-tab="projects" aria-label="Projects Tab">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-muted-foreground shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>Projects</span>
+      </button>
+
+      <button class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors" data-tab="bot" aria-label="Bot Console Tab">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-muted-foreground shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+        <span>Bot Console</span>
+      </button>
+
+      <button class="nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors" data-tab="notifications" aria-label="Notifications Tab">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-muted-foreground shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span>Notifications</span>
+        <span id="nav-notif-badge" class="ml-auto hidden items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500 text-zinc-950">0</span>
+      </button>
+    </div>
+
+    <!-- Status Footer -->
+    <div class="p-3 border-t border-border bg-zinc-950/40">
+      <div class="flex items-center justify-between px-3 py-2 rounded-md border border-border bg-background text-xs" id="sidebar-status-box">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-rose-500" id="status-indicator-dot"></span>
+          <span class="font-medium text-muted-foreground" id="status-indicator-text">Stopped</span>
+        </div>
+        <span class="font-mono text-[10px] text-zinc-500">PORT 3500</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main View Area ── -->
+  <main class="ml-0 md:ml-64 flex-1 flex flex-col min-h-screen w-full min-w-0">
+    <!-- Top Header Bar -->
+    <header class="h-14 border-b border-border px-4 sm:px-6 md:px-8 flex items-center justify-between sticky top-0 bg-background/90 backdrop-blur-md z-20">
+      <div class="flex items-center gap-2.5 min-w-0">
+        <button onclick="toggleMobileSidebar()" class="md:hidden inline-flex items-center justify-center w-8 h-8 rounded-md border border-border bg-secondary hover:bg-accent text-foreground transition-colors shrink-0" aria-label="Toggle Navigation">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <h1 class="text-sm font-semibold tracking-tight truncate" id="header-page-title">Project Management</h1>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="openNewProjectModal()" class="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm h-8 px-2.5 sm:px-3 transition-colors" aria-label="Create New Project">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <span>New Project</span>
+        </button>
+      </div>
+    </header>
+
+    <div class="p-4 sm:p-6 md:p-8 flex-1 w-full max-w-full">
+
+      <!-- ════════ Tab: Projects ════════ -->
+      <section class="tab-pane active" id="pane-projects">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-5" id="projects-grid">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Empty State -->
+        <div class="hidden flex-col items-center justify-center text-center p-8 sm:p-12 border border-dashed border-border rounded-xl bg-card/40 my-6" id="projects-empty">
+          <div class="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-muted-foreground mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h3 class="text-sm font-semibold mb-1">No Projects Configured</h3>
+          <p class="text-xs text-muted-foreground max-w-sm mb-4">Create a project profile to connect a WhatsApp group with Google Sheets and Google Drive.</p>
+          <button onclick="openNewProjectModal()" class="inline-flex items-center gap-2 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 shadow-sm transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Create Project Profile
+          </button>
+        </div>
+      </section>
+
+      <!-- ════════ Tab: Bot Console ════════ -->
+      <section class="tab-pane hidden space-y-5 sm:space-y-6" id="pane-bot">
+        <!-- Stat Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div class="rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+            <div class="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Execution Status
+            </div>
+            <div class="text-lg sm:text-xl font-bold font-mono text-rose-500" id="stat-bot-status">Stopped</div>
+          </div>
+
+          <div class="rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+            <div class="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Active Profile
+            </div>
+            <div class="text-sm font-semibold truncate" id="stat-bot-project">—</div>
+          </div>
+
+          <div class="rounded-xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+            <div class="text-xs font-medium text-muted-foreground flex items-center gap-1.5 mb-1">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Running Mode
+            </div>
+            <div class="text-sm font-semibold font-mono uppercase text-muted-foreground truncate" id="stat-bot-mode">—</div>
+          </div>
+        </div>
+
+        <!-- Launch & Mode Selector Panel -->
+        <div class="rounded-xl border border-border bg-card p-4 sm:p-6 shadow-sm space-y-4 sm:space-y-5">
+          <div>
+            <h2 class="text-sm font-semibold tracking-tight">Launch Configuration</h2>
+            <p class="text-xs text-muted-foreground">Select the target project profile and operational crawl mode.</p>
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium text-foreground" for="bot-target-select">Project Profile</label>
+            <select class="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground" id="bot-target-select">
+              <option value="">— Use default .env config —</option>
+            </select>
+          </div>
+
+          <!-- Mode Cards -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div class="mode-card rounded-lg border border-primary bg-primary/5 p-3.5 sm:p-4 cursor-pointer transition-all shadow-sm" data-mode="sync" onclick="selectMode('sync')">
+              <div class="flex items-center gap-2 font-semibold text-sm mb-1 text-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                <span>Sync + Live</span>
+              </div>
+              <p class="text-xs text-muted-foreground leading-relaxed">Scans missed offline album submissions, then listens live.</p>
+            </div>
+
+            <div class="mode-card rounded-lg border border-border bg-card hover:bg-accent/40 p-3.5 sm:p-4 cursor-pointer transition-all" data-mode="live" onclick="selectMode('live')">
+              <div class="flex items-center gap-2 font-semibold text-sm mb-1 text-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                <span>Live Only</span>
+              </div>
+              <p class="text-xs text-muted-foreground leading-relaxed">Starts listening immediately for incoming messages in real-time.</p>
+            </div>
+
+            <div class="mode-card rounded-lg border border-border bg-card hover:bg-accent/40 p-3.5 sm:p-4 cursor-pointer transition-all sm:col-span-2 lg:col-span-1" data-mode="backwards-only" onclick="selectMode('backwards-only')">
+              <div class="flex items-center gap-2 font-semibold text-sm mb-1 text-foreground">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+                <span>Sync Only</span>
+              </div>
+              <p class="text-xs text-muted-foreground leading-relaxed">Scans past chat history, uploads missed entries, and shuts down.</p>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="flex items-center gap-2.5 sm:gap-3 pt-1 flex-wrap">
+            <button class="inline-flex items-center gap-2 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white h-9 px-3.5 sm:px-4 shadow-sm transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none" id="btn-start-bot" onclick="startBot()">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span>Start Bot Client</span>
+            </button>
+
+            <button class="inline-flex items-center gap-2 rounded-md text-xs font-semibold bg-destructive hover:bg-destructive/90 text-destructive-foreground h-9 px-3.5 sm:px-4 shadow-sm transition-all active:scale-[0.98] disabled:opacity-40 disabled:pointer-events-none" id="btn-stop-bot" onclick="stopBot()" disabled>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12"/></svg>
+              <span>Stop Bot Client</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- DevTools Live Console -->
+        <div class="rounded-xl border border-border bg-zinc-950 overflow-hidden shadow-sm flex flex-col">
+          <!-- Toolbar -->
+          <div class="border-b border-border bg-card/60 p-3 sm:px-4 sm:py-2.5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <!-- Tabs -->
+            <div class="inline-flex h-8 items-center justify-start rounded-lg bg-muted p-1 text-muted-foreground overflow-x-auto max-w-full scrollbar-none">
+              <button class="console-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-2.5 py-0.5 text-xs font-medium transition-all bg-background text-foreground shadow-sm shrink-0" data-filter="all" onclick="setLogFilter('all')">All</button>
+              <button class="console-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-2.5 py-0.5 text-xs font-medium transition-all hover:text-foreground shrink-0" data-filter="info" onclick="setLogFilter('info')">Info</button>
+              <button class="console-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-2.5 py-0.5 text-xs font-medium transition-all hover:text-foreground shrink-0" data-filter="warn" onclick="setLogFilter('warn')">Warnings</button>
+              <button class="console-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-2.5 py-0.5 text-xs font-medium transition-all hover:text-foreground shrink-0" data-filter="error" onclick="setLogFilter('error')">Errors</button>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-2 w-full sm:w-auto">
+              <input type="text" class="h-8 flex-1 sm:w-44 rounded-md border border-input bg-background px-2.5 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="log-search-input" placeholder="Search logs..." oninput="renderLogs()">
+              
+              <button onclick="toggleAutoScroll()" class="h-8 px-2.5 text-xs rounded-md border border-border bg-secondary hover:bg-accent text-secondary-foreground transition-colors font-mono shrink-0" id="btn-autoscroll">
+                Scroll: ON
+              </button>
+
+              <button onclick="copyLogs()" class="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border bg-secondary hover:bg-accent text-secondary-foreground transition-colors shrink-0" title="Copy all logs" aria-label="Copy logs">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+
+              <button onclick="clearLogs()" class="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border bg-secondary hover:bg-accent text-secondary-foreground transition-colors shrink-0" title="Clear logs" aria-label="Clear console">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Console Screen -->
+          <div class="h-80 sm:h-96 overflow-y-auto p-3 sm:p-4 font-mono text-xs leading-relaxed text-zinc-300 custom-scroll selection:bg-zinc-700" id="console-screen" role="log">
+            <div class="text-zinc-500">[System] Snap2Sheet DevTools Console initialized. Ready.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ════════ Tab: Notifications ════════ -->
+      <section class="tab-pane hidden space-y-5 sm:space-y-6" id="pane-notifications">
+        <!-- Header & Action Bar -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-border pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-sm font-semibold tracking-tight text-foreground">WhatsApp Activity & Notifications</h2>
+              <span id="notif-count-badge" class="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-secondary text-secondary-foreground border border-border">0 Notifikasi</span>
+            </div>
+            <p class="text-xs text-muted-foreground mt-0.5">Semua laporan masuk, status penyimpanan Sheets, dan aktivitas WhatsApp tercatat di sini.</p>
+          </div>
+
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <button onclick="markAllNotificationsRead()" class="inline-flex items-center gap-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border h-8 px-3 transition-colors shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>Tandai Sudah Dibaca</span>
+            </button>
+            <button onclick="clearAllNotifications()" class="inline-flex items-center gap-1.5 rounded-md text-xs font-medium bg-transparent hover:bg-destructive/10 text-muted-foreground hover:text-destructive border border-border h-8 px-3 transition-colors shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <span>Bersihkan</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="inline-flex h-8 items-center justify-start rounded-lg bg-muted p-1 text-muted-foreground overflow-x-auto max-w-full scrollbar-none">
+          <button class="notif-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all bg-background text-foreground shadow-sm" data-type="all" onclick="setNotifFilter('all')">Semua</button>
+          <button class="notif-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all hover:text-foreground" data-type="success" onclick="setNotifFilter('success')">Laporan Selesai</button>
+          <button class="notif-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all hover:text-foreground" data-type="info" onclick="setNotifFilter('info')">Draft & Sinkron</button>
+          <button class="notif-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all hover:text-foreground" data-type="warn" onclick="setNotifFilter('warn')">Peringatan</button>
+        </div>
+
+        <!-- Notifications Container -->
+        <div class="space-y-3" id="notifications-feed">
+          <!-- Populated by JS -->
+        </div>
+
+        <!-- Empty State -->
+        <div class="hidden flex-col items-center justify-center text-center p-8 sm:p-12 border border-dashed border-border rounded-xl bg-card/40 my-6" id="notifications-empty">
+          <div class="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-muted-foreground mb-3">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          </div>
+          <h3 class="text-sm font-semibold mb-1">Belum Ada Notifikasi</h3>
+          <p class="text-xs text-muted-foreground max-w-sm">Aktivitas pelaporan dari grup WhatsApp akan otomatis muncul di sini secara instan.</p>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+</div>
+
+<!-- ═══ shadcn Dialog: Project Setup & Edit ═══ -->
+<div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-3 sm:p-4" id="project-modal" role="dialog" aria-modal="true">
+  <div class="relative w-full max-w-lg sm:max-w-xl border border-border bg-background shadow-2xl rounded-xl overflow-hidden flex flex-col max-h-[92vh]">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-border">
+      <div>
+        <h2 class="text-sm font-semibold text-foreground tracking-tight" id="modal-title">Configure Project</h2>
+        <p class="text-xs text-muted-foreground">Manage storage targets and authentication profiles.</p>
+      </div>
+      <button onclick="closeModal()" class="rounded-sm opacity-70 hover:opacity-100 transition-opacity p-1 text-muted-foreground hover:text-foreground" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Stepper Navigation (Horizontally scrollable on mobile) -->
+    <div class="flex overflow-x-auto whitespace-nowrap border-b border-border bg-muted/30 text-center text-xs font-medium scrollbar-none">
+      <button class="step-nav-btn flex-1 min-w-[64px] py-2.5 border-b-2 border-primary text-foreground shrink-0" data-step="1" onclick="jumpToStep(1)">1. Name</button>
+      <button class="step-nav-btn flex-1 min-w-[64px] py-2.5 border-b-2 border-transparent text-muted-foreground hover:text-foreground shrink-0" data-step="2" onclick="jumpToStep(2)">2. Auth</button>
+      <button class="step-nav-btn flex-1 min-w-[64px] py-2.5 border-b-2 border-transparent text-muted-foreground hover:text-foreground shrink-0" data-step="3" onclick="jumpToStep(3)">3. Target</button>
+      <button class="step-nav-btn flex-1 min-w-[64px] py-2.5 border-b-2 border-transparent text-muted-foreground hover:text-foreground shrink-0" data-step="4" onclick="jumpToStep(4)">4. Route</button>
+      <button class="step-nav-btn flex-1 min-w-[64px] py-2.5 border-b-2 border-transparent text-muted-foreground hover:text-foreground shrink-0" data-step="5" onclick="jumpToStep(5)">5. Test</button>
+    </div>
+
+    <!-- Body -->
+    <div class="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
+      <!-- Step 1 -->
+      <div class="wizard-step space-y-3" data-step="1">
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-foreground" for="f-name">Project Slug / Identifier</label>
+          <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-name" placeholder="e.g. proyek-pipa-2026">
+          <p class="text-[11px] text-muted-foreground">Unique identifier used for storage and auth cache files.</p>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-foreground" for="f-desc">Description (Optional)</label>
+          <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-desc" placeholder="Brief project summary...">
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div class="wizard-step hidden space-y-3" data-step="2">
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-foreground" for="f-authMode">Google Authentication Type</label>
+          <select class="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring text-foreground" id="f-authMode" onchange="toggleAuthMode()">
+            <option value="oauth">OAuth 2.0 (Recommended for My Drive)</option>
+            <option value="service_account">Service Account (Google Workspace Shared Drive)</option>
+          </select>
+        </div>
+
+        <div id="oauth-fields" class="space-y-3">
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium text-foreground" for="f-clientId">Google Client ID</label>
+            <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-clientId" placeholder="740866512705-hpp6...">
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium text-foreground" for="f-clientSecret">Google Client Secret</label>
+            <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-clientSecret" placeholder="GOCSPX-...">
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium text-foreground" for="f-refreshToken">Refresh Token</label>
+            <div class="flex gap-2">
+              <input type="text" class="flex-1 h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-refreshToken" placeholder="Auto-captured token">
+              <button type="button" class="inline-flex items-center gap-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border px-3 h-9 transition-colors shrink-0" id="btn-oauth-login" onclick="triggerOAuth()">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                Authorize
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="sa-fields" class="hidden space-y-3">
+          <div class="space-y-1.5">
+            <label class="text-xs font-medium text-foreground" for="f-saJson">Service Account JSON Path</label>
+            <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-saJson" placeholder="./credentials/service-account.json">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div class="wizard-step hidden space-y-3" data-step="3">
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-foreground" for="f-sheetUrl">Google Spreadsheet (URL or ID)</label>
+          <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-sheetUrl" placeholder="Paste full Google Sheets URL...">
+          <div class="text-[11px] font-mono text-muted-foreground truncate">Parsed ID: <span class="text-foreground" id="val-sheet-id">—</span></div>
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-foreground" for="f-sheetName">Worksheet Tab Name</label>
+          <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-sheetName" value="Sheet1">
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-foreground" for="f-driveUrl">Google Drive Folder (URL or ID)</label>
+          <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-driveUrl" placeholder="Paste full Google Drive folder URL...">
+          <div class="text-[11px] font-mono text-muted-foreground truncate">Parsed ID: <span class="text-foreground" id="val-drive-id">—</span></div>
+        </div>
+      </div>
+
+      <!-- Step 4 -->
+      <div class="wizard-step hidden space-y-3" data-step="4">
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-foreground" for="f-groupName">Target WhatsApp Group Name</label>
+          <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-groupName" placeholder="e.g. Grup Laporan Operasional">
+        </div>
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-foreground" for="f-groupId">Target WhatsApp Group ID</label>
+          <input type="text" class="w-full h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm font-mono text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" id="f-groupId" placeholder="120363428932565514@g.us">
+          <p class="text-[11px] text-muted-foreground">Tip: Send <code>!idgrup</code> in your WhatsApp group to find this value.</p>
+        </div>
+      </div>
+
+      <!-- Step 5 -->
+      <div class="wizard-step hidden text-center space-y-4" data-step="5">
+        <div class="py-2">
+          <h4 class="text-sm font-semibold mb-1">Verify Permissions & Connectivity</h4>
+          <p class="text-xs text-muted-foreground">Check Google Drive upload capabilities and Google Sheets header structure.</p>
+        </div>
+
+        <button type="button" class="inline-flex items-center gap-2 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border h-8 px-3 shadow-sm transition-colors" id="btn-diag-test" onclick="runDiagnosticTest()">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Run Diagnostics
+        </button>
+
+        <div id="diag-results-box" class="text-left"></div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="px-5 sm:px-6 py-3 border-t border-border bg-muted/20 flex items-center justify-end gap-2">
+      <button type="button" onclick="closeModal()" class="inline-flex items-center justify-center rounded-md text-xs font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 transition-colors">
+        Cancel
+      </button>
+      <button type="button" id="btn-modal-prev" onclick="prevStep()" class="hidden inline-flex items-center justify-center rounded-md text-xs font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3 transition-colors">
+        Back
+      </button>
+      <button type="button" id="btn-modal-next" onclick="nextStep()" class="inline-flex items-center justify-center rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 transition-colors">
+        Next
+      </button>
+      <button type="button" id="btn-modal-save" onclick="saveProjectFromModal()" class="hidden inline-flex items-center justify-center rounded-md text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white h-8 px-3 transition-colors">
+        Save Profile
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ shadcn Dialog: WhatsApp QR Code Scan ═══ -->
+<div class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4" id="qr-modal" role="dialog" aria-modal="true">
+  <div class="relative w-full max-w-sm border border-border bg-background shadow-2xl rounded-xl p-5 sm:p-6 text-center space-y-4">
+    <div class="flex items-center justify-between border-b border-border pb-3">
+      <div class="flex items-center gap-2">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+        </span>
+        <h3 class="text-sm font-semibold text-foreground tracking-tight">Scan WhatsApp QR Code</h3>
+      </div>
+      <button onclick="closeQrModal()" class="rounded-sm opacity-70 hover:opacity-100 transition-opacity p-1 text-muted-foreground hover:text-foreground" aria-label="Close">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <!-- Clean white container for sharp camera scanning -->
+    <div class="flex justify-center items-center p-3 sm:p-4 bg-white rounded-xl shadow-inner mx-auto w-fit">
+      <div id="qr-canvas-box" class="w-[200px] h-[200px] sm:w-[220px] sm:h-[220px] flex items-center justify-center">
+        <div class="text-xs text-zinc-600 animate-pulse font-mono">Generating QR Code...</div>
+      </div>
+    </div>
+
+    <div class="space-y-1 text-left bg-muted/40 p-3 rounded-lg text-xs text-muted-foreground">
+      <div class="font-medium text-foreground mb-1">Cara Scan di HP:</div>
+      <div>1. Buka <strong>WhatsApp</strong> di HP</div>
+      <div>2. Ketuk <strong>Menu (⋮)</strong> &bull; <strong>Perangkat Tertaut</strong></div>
+      <div>3. Ketuk <strong>Tautkan Perangkat</strong></div>
+      <div>4. Arahkan kamera ke QR Code di atas</div>
+    </div>
+
+    <div class="text-[11px] text-zinc-400 animate-pulse font-mono">Menunggu scan dari WhatsApp...</div>
+  </div>
+</div>
+
+<!-- ═══ shadcn Toast Stack ═══ -->
+<div class="fixed bottom-4 right-4 left-4 sm:left-auto z-50 flex flex-col gap-2 pointer-events-none" id="toast-stack" aria-live="polite"></div>
+
+<script>
+const API = '';
+let currentTab = 'projects';
+let activeStep = 1;
+const maxSteps = 5;
+let currentEditingName = null;
+let allLogs = [];
+let logFilter = 'all';
+let autoScrollEnabled = true;
+let eventSource = null;
+let selectedBotMode = 'sync';
+
+// Notifications state
+let notificationsList = [];
+let notifFilter = 'all';
+
+// ── Lifecycle ──
+document.addEventListener('DOMContentLoaded', () => {
+  initNavigation();
+  loadProjects();
+  loadNotifications();
+  refreshBotStatus();
+  setInterval(refreshBotStatus, 3000);
+  setInterval(loadNotifications, 10000);
+  initUrlLiveExtraction();
+  initKeyboardNav();
+});
+
+// ── Mobile Sidebar Drawer ──
+function toggleMobileSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const isClosed = sidebar.classList.contains('-translate-x-full');
+  if (isClosed) {
+    sidebar.classList.remove('-translate-x-full');
+    backdrop.classList.remove('hidden');
+  } else {
+    sidebar.classList.add('-translate-x-full');
+    backdrop.classList.add('hidden');
+  }
+}
+
+function initKeyboardNav() {
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      closeQrModal();
+      const sidebar = document.getElementById('sidebar');
+      if (!sidebar.classList.contains('-translate-x-full')) {
+        toggleMobileSidebar();
+      }
+    }
+  });
+}
+
+// ── Tab Switcher ──
+function initNavigation() {
+  document.querySelectorAll('.nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.nav-btn').forEach(b => {
+        b.className = 'nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors';
+      });
+      btn.className = 'nav-btn w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-foreground bg-accent transition-colors';
+
+      const target = btn.dataset.tab;
+      currentTab = target;
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.add('hidden'));
+      document.getElementById(`pane-${target}`).classList.remove('hidden');
+
+      const titles = {
+        projects: 'Project Management',
+        bot: 'Bot Console & Diagnostics',
+        notifications: 'WhatsApp Notifications & Activity',
+      };
+      document.getElementById('header-page-title').textContent = titles[target] || 'Dashboard';
+
+      // Auto close mobile drawer when navigating
+      if (window.innerWidth < 768) {
+        const sidebar = document.getElementById('sidebar');
+        if (!sidebar.classList.contains('-translate-x-full')) {
+          toggleMobileSidebar();
+        }
+      }
+
+      if (target === 'bot') {
+        loadProjectsForSelect();
+        connectLogsSSE();
+      } else if (target === 'notifications') {
+        loadNotifications();
+        connectLogsSSE();
+      }
+    });
+  });
+}
+
+// ── shadcn Toast Notifications ──
+function showToast(message, type = 'success') {
+  const stack = document.getElementById('toast-stack');
+  const toast = document.createElement('div');
+  const borderClass = type === 'success' ? 'border-emerald-500/30 bg-zinc-900 text-zinc-100' : 'border-rose-500/30 bg-zinc-900 text-rose-200';
+  const icon = type === 'success'
+    ? '<svg class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+    : '<svg class="w-4 h-4 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+
+  toast.className = `pointer-events-auto flex items-center gap-2.5 rounded-lg border px-4 py-2.5 shadow-lg text-xs font-medium transition-all ${borderClass}`;
+  toast.innerHTML = `${icon}<span class="truncate">${escapeHtml(message)}</span>`;
+  stack.appendChild(toast);
+  setTimeout(() => toast.remove(), 4500);
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── Notification Center Feed ──
+async function loadNotifications() {
+  try {
+    const res = await fetch(`${API}/api/notifications`);
+    const data = await res.json();
+    notificationsList = data.notifications || [];
+    updateNotifBadge(data.unreadCount || 0);
+    renderNotifications();
+  } catch {}
+}
+
+function updateNotifBadge(count) {
+  const badge = document.getElementById('nav-notif-badge');
+  const countBadge = document.getElementById('notif-count-badge');
+  if (countBadge) {
+    countBadge.textContent = `${notificationsList.length} Notifikasi`;
+  }
+  if (!badge) return;
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.classList.remove('hidden');
+    badge.classList.add('inline-flex');
+  } else {
+    badge.classList.add('hidden');
+    badge.classList.remove('inline-flex');
+  }
+}
+
+function setNotifFilter(type) {
+  notifFilter = type;
+  document.querySelectorAll('.notif-tab').forEach(t => {
+    if (t.dataset.type === type) {
+      t.className = 'notif-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all bg-background text-foreground shadow-sm';
+    } else {
+      t.className = 'notif-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-all hover:text-foreground';
+    }
+  });
+  renderNotifications();
+}
+
+function renderNotifications() {
+  const feed = document.getElementById('notifications-feed');
+  const empty = document.getElementById('notifications-empty');
+  if (!feed) return;
+
+  const filtered = notificationsList.filter(n => {
+    if (notifFilter === 'all') return true;
+    return n.type === notifFilter;
+  });
+
+  if (filtered.length === 0) {
+    feed.innerHTML = '';
+    empty?.classList.remove('hidden');
+    empty?.classList.add('flex');
+    return;
+  }
+
+  empty?.classList.add('hidden');
+  empty?.classList.remove('flex');
+
+  feed.innerHTML = filtered.map(n => {
+    let iconSvg = '';
+    let badgeClass = '';
+    let borderAccent = 'border-border';
+
+    if (n.type === 'success') {
+      borderAccent = 'border-emerald-500/30 bg-emerald-950/10';
+      badgeClass = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+      iconSvg = '<svg class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+    } else if (n.type === 'info') {
+      borderAccent = 'border-blue-500/30 bg-blue-950/10';
+      badgeClass = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+      iconSvg = '<svg class="w-4 h-4 text-blue-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+    } else if (n.type === 'warn') {
+      borderAccent = 'border-amber-500/30 bg-amber-950/10';
+      badgeClass = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      iconSvg = '<svg class="w-4 h-4 text-amber-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
+    } else {
+      borderAccent = 'border-rose-500/30 bg-rose-950/10';
+      badgeClass = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+      iconSvg = '<svg class="w-4 h-4 text-rose-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+    }
+
+    const timeStr = n.timestamp ? new Date(n.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+
+    return `
+      <div class="rounded-xl border ${borderAccent} p-4 text-card-foreground shadow-sm transition-all hover:bg-card/90">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start gap-3 min-w-0">
+            <div class="p-2 rounded-lg bg-card border border-border mt-0.5 shrink-0">
+              ${iconSvg}
+            </div>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap mb-1">
+                <span class="font-semibold text-sm text-foreground tracking-tight truncate">${escapeHtml(n.title)}</span>
+                ${n.noreg ? `<span class="px-2 py-0.5 text-[10px] font-mono font-semibold rounded border ${badgeClass}">NoReg: ${escapeHtml(n.noreg)}</span>` : ''}
+              </div>
+              <p class="text-xs text-muted-foreground leading-relaxed break-words">${escapeHtml(n.message)}</p>
+            </div>
+          </div>
+          <div class="text-[11px] font-mono text-muted-foreground/80 shrink-0 whitespace-nowrap">
+            ${timeStr}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function markAllNotificationsRead() {
+  try {
+    await fetch(`${API}/api/notifications/read-all`, { method: 'POST' });
+    notificationsList.forEach(n => n.read = true);
+    updateNotifBadge(0);
+    renderNotifications();
+    showToast('Semua notifikasi ditandai dibaca.');
+  } catch {}
+}
+
+async function clearAllNotifications() {
+  try {
+    await fetch(`${API}/api/notifications`, { method: 'DELETE' });
+    notificationsList = [];
+    updateNotifBadge(0);
+    renderNotifications();
+    showToast('Feed notifikasi dibersihkan.');
+  } catch {}
+}
+
+// ── Projects CRUD ──
+async function loadProjects() {
+  try {
+    const res = await fetch(`${API}/api/projects`);
+    const projects = await res.json();
+    const grid = document.getElementById('projects-grid');
+    const empty = document.getElementById('projects-empty');
+
+    if (!projects || projects.length === 0) {
+      grid.innerHTML = '';
+      empty.classList.remove('hidden');
+      empty.classList.add('flex');
+      return;
+    }
+
+    empty.classList.add('hidden');
+    empty.classList.remove('flex');
+
+    grid.innerHTML = projects.map(p => `
+      <div class="rounded-xl border border-border bg-card p-4 sm:p-5 text-card-foreground shadow-sm flex flex-col justify-between hover:border-zinc-700 transition-colors">
+        <div>
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="font-semibold text-sm tracking-tight text-foreground flex items-center gap-2 truncate">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-muted-foreground shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span class="truncate">${escapeHtml(p.name)}</span>
+            </div>
+            <button onclick="deleteProject('${escapeHtml(p.name)}')" class="text-muted-foreground hover:text-destructive p-1 rounded transition-colors shrink-0" title="Delete">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+
+          ${p.description ? `<p class="text-xs text-muted-foreground mb-3 sm:mb-4 leading-relaxed line-clamp-2">${escapeHtml(p.description)}</p>` : ''}
+
+          <div class="space-y-1.5 mb-4 sm:mb-5 font-mono text-[11px]">
+            <div class="flex items-center gap-2 p-1.5 rounded bg-muted/40 text-muted-foreground truncate">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-zinc-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span class="truncate">Sheet: <strong class="text-foreground">${escapeHtml(p.sheetName)}</strong> &bull; ${escapeHtml(p.spreadsheetId ? p.spreadsheetId.slice(0, 14) + '...' : '—')}</span>
+            </div>
+            <div class="flex items-center gap-2 p-1.5 rounded bg-muted/40 text-muted-foreground truncate">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-zinc-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span class="truncate">Drive: ${escapeHtml(p.driveFolderId ? p.driveFolderId.slice(0, 16) + '...' : '—')}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-3 border-t border-border flex-wrap">
+          <button onclick="runProject('${escapeHtml(p.name)}')" class="inline-flex items-center justify-center gap-1.5 rounded-md text-xs font-medium bg-secondary text-secondary-foreground hover:bg-accent border border-border h-7 px-2.5 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Run
+          </button>
+          <button onclick="quickTestProject('${escapeHtml(p.name)}', this)" class="inline-flex items-center justify-center gap-1.5 rounded-md text-xs font-medium bg-transparent hover:bg-muted text-muted-foreground hover:text-foreground h-7 px-2.5 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Test
+          </button>
+          <button onclick="editProject('${escapeHtml(p.name)}')" class="inline-flex items-center justify-center gap-1.5 rounded-md text-xs font-medium bg-transparent hover:bg-muted text-muted-foreground hover:text-foreground h-7 px-2.5 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            Edit
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch (err) {
+    showToast(`Error loading projects: ${err.message}`, 'error');
+  }
+}
+
+async function quickTestProject(name, btn) {
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="spin w-3 h-3 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg> Checking...`;
+  try {
+    const res = await fetch(`${API}/api/projects/${encodeURIComponent(name)}/validate`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`✓ ${name}: Connection Verified!`, 'success');
+    } else {
+      showToast(`✗ ${name}: ${(data.messages || []).join(' | ')}`, 'error');
+    }
+  } catch (err) {
+    showToast(`Test error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+}
+
+async function deleteProject(name) {
+  if (!confirm(`Delete project "${name}"?`)) return;
+  try {
+    const res = await fetch(`${API}/api/projects/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`Project "${name}" deleted.`);
+      loadProjects();
+    }
+  } catch (err) {
+    showToast(`Delete failed: ${err.message}`, 'error');
+  }
+}
+
+function runProject(name) {
+  document.querySelector('[data-tab="bot"]').click();
+  loadProjectsForSelect().then(() => {
+    document.getElementById('bot-target-select').value = name;
+  });
+}
+
+// ── Modal Wizard ──
+function openNewProjectModal() {
+  currentEditingName = null;
+  document.getElementById('modal-title').textContent = 'New Project Configuration';
+  resetModalForm();
+  activeStep = 1;
+  updateStepperUI();
+  document.getElementById('project-modal').classList.remove('hidden');
+  document.getElementById('project-modal').classList.add('flex');
+}
+
+async function editProject(name) {
+  try {
+    const res = await fetch(`${API}/api/projects/${encodeURIComponent(name)}`);
+    const p = await res.json();
+    currentEditingName = p.name;
+    document.getElementById('modal-title').textContent = `Edit Profile: ${p.name}`;
+
+    document.getElementById('f-name').value = p.name || '';
+    document.getElementById('f-name').disabled = true;
+    document.getElementById('f-desc').value = p.description || '';
+    document.getElementById('f-authMode').value = p.googleAuthMode || 'oauth';
+    document.getElementById('f-clientId').value = p.googleClientId || '';
+    document.getElementById('f-clientSecret').value = p.googleClientSecret || '';
+    document.getElementById('f-refreshToken').value = p.googleRefreshToken || '';
+    document.getElementById('f-saJson').value = p.googleServiceAccountJson || '';
+    document.getElementById('f-sheetUrl').value = p.spreadsheetId || '';
+    document.getElementById('f-sheetName').value = p.sheetName || 'Sheet1';
+    document.getElementById('f-driveUrl').value = p.driveFolderId || '';
+    document.getElementById('f-groupName').value = p.targetGroupName || '';
+    document.getElementById('f-groupId').value = p.targetGroupId || '';
+
+    toggleAuthMode();
+    extractSheetAndDriveIds();
+    activeStep = 1;
+    updateStepperUI();
+    document.getElementById('project-modal').classList.remove('hidden');
+    document.getElementById('project-modal').classList.add('flex');
+  } catch (err) {
+    showToast(`Error loading profile: ${err.message}`, 'error');
+  }
+}
+
+function resetModalForm() {
+  document.getElementById('f-name').value = '';
+  document.getElementById('f-name').disabled = false;
+  document.getElementById('f-desc').value = '';
+  document.getElementById('f-authMode').value = 'oauth';
+  document.getElementById('f-clientId').value = '';
+  document.getElementById('f-clientSecret').value = '';
+  document.getElementById('f-refreshToken').value = '';
+  document.getElementById('f-saJson').value = '';
+  document.getElementById('f-sheetUrl').value = '';
+  document.getElementById('f-sheetName').value = 'Sheet1';
+  document.getElementById('f-driveUrl').value = '';
+  document.getElementById('f-groupName').value = '';
+  document.getElementById('f-groupId').value = '';
+  document.getElementById('val-sheet-id').textContent = '—';
+  document.getElementById('val-drive-id').textContent = '—';
+  document.getElementById('diag-results-box').innerHTML = '';
+  toggleAuthMode();
+}
+
+function closeModal() {
+  document.getElementById('project-modal').classList.add('hidden');
+  document.getElementById('project-modal').classList.remove('flex');
+}
+
+function toggleAuthMode() {
+  const mode = document.getElementById('f-authMode').value;
+  document.getElementById('oauth-fields').classList.toggle('hidden', mode !== 'oauth');
+  document.getElementById('sa-fields').classList.toggle('hidden', mode !== 'service_account');
+}
+
+function updateStepperUI() {
+  document.querySelectorAll('.wizard-step').forEach(el => {
+    el.classList.toggle('hidden', Number(el.dataset.step) !== activeStep);
+  });
+
+  document.querySelectorAll('.step-nav-btn').forEach(el => {
+    const s = Number(el.dataset.step);
+    if (s === activeStep) {
+      el.className = 'step-nav-btn flex-1 min-w-[64px] py-2.5 border-b-2 border-primary text-foreground shrink-0';
+    } else {
+      el.className = 'step-nav-btn flex-1 min-w-[64px] py-2.5 border-b-2 border-transparent text-muted-foreground hover:text-foreground shrink-0';
+    }
+  });
+
+  document.getElementById('btn-modal-prev').classList.toggle('hidden', activeStep === 1);
+  document.getElementById('btn-modal-next').classList.toggle('hidden', activeStep === maxSteps);
+  document.getElementById('btn-modal-save').classList.toggle('hidden', activeStep !== maxSteps);
+}
+
+function nextStep() {
+  if (activeStep === 1) {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) {
+      showToast('Project slug is required.', 'error');
+      return;
+    }
+  }
+  if (activeStep === 3) extractSheetAndDriveIds();
+  if (activeStep < maxSteps) {
+    activeStep++;
+    updateStepperUI();
+  }
+}
+
+function prevStep() {
+  if (activeStep > 1) {
+    activeStep--;
+    updateStepperUI();
+  }
+}
+
+function jumpToStep(step) {
+  if (step <= activeStep) {
+    activeStep = step;
+    updateStepperUI();
+  }
+}
+
+// ── Live URL Parser ──
+function initUrlLiveExtraction() {
+  document.getElementById('f-sheetUrl').addEventListener('input', extractSheetAndDriveIds);
+  document.getElementById('f-driveUrl').addEventListener('input', extractSheetAndDriveIds);
+}
+
+async function extractSheetAndDriveIds() {
+  const sheetUrl = document.getElementById('f-sheetUrl').value.trim();
+  const driveUrl = document.getElementById('f-driveUrl').value.trim();
+
+  try {
+    const res = await fetch(`${API}/api/extract-ids`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sheetUrl, driveUrl }),
+    });
+    const data = await res.json();
+    document.getElementById('val-sheet-id').textContent = data.spreadsheetId || '—';
+    document.getElementById('val-drive-id').textContent = data.driveFolderId || '—';
+  } catch {}
+}
+
+// ── OAuth Flow ──
+async function triggerOAuth() {
+  const clientId = document.getElementById('f-clientId').value.trim();
+  const clientSecret = document.getElementById('f-clientSecret').value.trim();
+  if (!clientId || !clientSecret) {
+    showToast('Client ID and Client Secret are required.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btn-oauth-login');
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg> Waiting...`;
+
+  try {
+    const res = await fetch(`${API}/api/oauth/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientId, clientSecret }),
+    });
+    const data = await res.json();
+    if (data.ok && data.refreshToken) {
+      document.getElementById('f-refreshToken').value = data.refreshToken;
+      showToast('OAuth complete! Token captured.', 'success');
+    } else {
+      showToast(data.error || 'OAuth failed.', 'error');
+    }
+  } catch (err) {
+    showToast(`OAuth Error: ${err.message}`, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Authorize`;
+  }
+}
+
+// ── Diagnostics ──
+async function runDiagnosticTest() {
+  const btn = document.getElementById('btn-diag-test');
+  const resultsBox = document.getElementById('diag-results-box');
+  btn.disabled = true;
+  btn.innerHTML = `<svg class="spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg> Checking...`;
+  resultsBox.innerHTML = '';
+
+  const profile = serializeFormToProfile();
+  try {
+    const res = await fetch(`${API}/api/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    });
+    const data = await res.json();
+    const borderClass = data.ok ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-300' : 'border-rose-500/30 bg-rose-950/20 text-rose-300';
+    resultsBox.innerHTML = `
+      <div class="rounded-lg border p-3 text-xs leading-relaxed ${borderClass}">
+        ${(data.messages || []).map(m => `<div>${escapeHtml(m)}</div>`).join('')}
+      </div>
+    `;
+  } catch (err) {
+    resultsBox.innerHTML = `<div class="rounded-lg border border-rose-500/30 bg-rose-950/20 p-3 text-xs text-rose-300">Diagnostic error: ${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Run Diagnostics`;
+  }
+}
+
+function serializeFormToProfile() {
+  const authMode = document.getElementById('f-authMode').value;
+  const profile = {
+    name: document.getElementById('f-name').value.trim(),
+    googleAuthMode: authMode,
+    spreadsheetId: document.getElementById('f-sheetUrl').value.trim(),
+    sheetName: document.getElementById('f-sheetName').value.trim() || 'Sheet1',
+    driveFolderId: document.getElementById('f-driveUrl').value.trim(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const desc = document.getElementById('f-desc').value.trim();
+  if (desc) profile.description = desc;
+  const gn = document.getElementById('f-groupName').value.trim();
+  if (gn) profile.targetGroupName = gn;
+  const gi = document.getElementById('f-groupId').value.trim();
+  if (gi) profile.targetGroupId = gi;
+
+  if (authMode === 'oauth') {
+    const cid = document.getElementById('f-clientId').value.trim();
+    if (cid) profile.googleClientId = cid;
+    const cs = document.getElementById('f-clientSecret').value.trim();
+    if (cs) profile.googleClientSecret = cs;
+    const rt = document.getElementById('f-refreshToken').value.trim();
+    if (rt) profile.googleRefreshToken = rt;
+  } else {
+    const sa = document.getElementById('f-saJson').value.trim();
+    if (sa) profile.googleServiceAccountJson = sa;
+  }
+  return profile;
+}
+
+async function saveProjectFromModal() {
+  const profile = serializeFormToProfile();
+  if (!profile.name) {
+    showToast('Project slug is required.', 'error');
+    return;
+  }
+
+  try {
+    const method = currentEditingName ? 'PUT' : 'POST';
+    const url = currentEditingName
+      ? `${API}/api/projects/${encodeURIComponent(currentEditingName)}`
+      : `${API}/api/projects`;
+
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(profile),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`Project "${data.name}" saved!`, 'success');
+      closeModal();
+      loadProjects();
+    } else {
+      showToast(data.error || 'Failed to save.', 'error');
+    }
+  } catch (err) {
+    showToast(`Save error: ${err.message}`, 'error');
+  }
+}
+
+// ── QR Modal Handlers ──
+let currentQRString = null;
+
+function showQrModal(qrData) {
+  if (currentQRString === qrData) return;
+  currentQRString = qrData;
+  const box = document.getElementById('qr-canvas-box');
+  box.innerHTML = '';
+  try {
+    new QRCode(box, {
+      text: qrData,
+      width: 220,
+      height: 220,
+      colorDark: '#000000',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    const modal = document.getElementById('qr-modal');
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  } catch (err) {
+    console.error('QR render error:', err);
+  }
+}
+
+function closeQrModal() {
+  const modal = document.getElementById('qr-modal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  currentQRString = null;
+}
+
+// ── Bot Operations ──
+function selectMode(mode) {
+  selectedBotMode = mode;
+  document.querySelectorAll('.mode-card').forEach(card => {
+    const isSelected = card.dataset.mode === mode;
+    card.className = isSelected
+      ? 'mode-card rounded-lg border border-primary bg-primary/5 p-3.5 sm:p-4 cursor-pointer transition-all shadow-sm'
+      : 'mode-card rounded-lg border border-border bg-card hover:bg-accent/40 p-3.5 sm:p-4 cursor-pointer transition-all';
+  });
+}
+
+async function loadProjectsForSelect() {
+  try {
+    const res = await fetch(`${API}/api/projects`);
+    const projects = await res.json();
+    const sel = document.getElementById('bot-target-select');
+    sel.innerHTML = '<option value="">— Use default .env config —</option>';
+    projects.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.name;
+      opt.textContent = `${p.name} (Sheet: ${p.sheetName})`;
+      sel.appendChild(opt);
+    });
+  } catch {}
+}
+
+async function refreshBotStatus() {
+  try {
+    const res = await fetch(`${API}/api/bot/status`);
+    const data = await res.json();
+
+    const dot = document.getElementById('status-indicator-dot');
+    const text = document.getElementById('status-indicator-text');
+    const statStatus = document.getElementById('stat-bot-status');
+    const statProject = document.getElementById('stat-bot-project');
+    const statMode = document.getElementById('stat-bot-mode');
+    const btnStart = document.getElementById('btn-start-bot');
+    const btnStop = document.getElementById('btn-stop-bot');
+
+    if (data.running) {
+      dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+      text.textContent = 'Running';
+      text.className = 'font-medium text-emerald-400';
+      statStatus.textContent = 'Running';
+      statStatus.className = 'text-lg sm:text-xl font-bold font-mono text-emerald-400';
+      statProject.textContent = data.project || '.env';
+      statMode.textContent = data.mode?.toUpperCase() || '—';
+      statMode.className = 'text-sm font-semibold font-mono uppercase text-foreground truncate';
+      btnStart.disabled = true;
+      btnStop.disabled = false;
+
+      if (data.hasQr) {
+        fetch(`${API}/api/bot/qr`)
+          .then(r => r.json())
+          .then(d => { if (d.qr) showQrModal(d.qr); });
+      }
+    } else {
+      dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+      text.textContent = 'Stopped';
+      text.className = 'font-medium text-muted-foreground';
+      statStatus.textContent = 'Stopped';
+      statStatus.className = 'text-lg sm:text-xl font-bold font-mono text-rose-500';
+      statProject.textContent = '—';
+      statMode.textContent = '—';
+      statMode.className = 'text-sm font-semibold font-mono uppercase text-muted-foreground truncate';
+      btnStart.disabled = false;
+      btnStop.disabled = true;
+      closeQrModal();
+    }
+  } catch {}
+}
+
+async function startBot() {
+  const project = document.getElementById('bot-target-select').value || undefined;
+  const mode = selectedBotMode;
+
+  try {
+    const res = await fetch(`${API}/api/bot/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project, mode }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      showToast(`Bot started (${mode.toUpperCase()})`, 'success');
+      connectLogsSSE();
+    } else {
+      showToast(data.error || 'Failed to start.', 'error');
+    }
+    refreshBotStatus();
+  } catch (err) {
+    showToast(`Launch error: ${err.message}`, 'error');
+  }
+}
+
+async function stopBot() {
+  try {
+    await fetch(`${API}/api/bot/stop`, { method: 'POST' });
+    showToast('Stopping bot...', 'info');
+    closeQrModal();
+    refreshBotStatus();
+  } catch (err) {
+    showToast(`Stop error: ${err.message}`, 'error');
+  }
+}
+
+// ── SSE Logs & Realtime Notification Bus ──
+function connectLogsSSE() {
+  if (eventSource) return;
+  eventSource = new EventSource(`${API}/api/bot/logs`);
+  allLogs = [];
+
+  eventSource.onmessage = (e) => {
+    const line = JSON.parse(e.data);
+    allLogs.push(line);
+    if (allLogs.length > 500) allLogs.shift();
+    renderLogs();
+  };
+
+  eventSource.addEventListener('qr', (e) => {
+    const qrData = JSON.parse(e.data);
+    if (qrData) showQrModal(qrData);
+  });
+
+  eventSource.addEventListener('authenticated', () => {
+    closeQrModal();
+    showToast('WhatsApp connected successfully!', 'success');
+  });
+
+  eventSource.addEventListener('bot_notification', (e) => {
+    const notif = JSON.parse(e.data);
+    notificationsList.unshift(notif);
+    if (notificationsList.length > 200) notificationsList.pop();
+    
+    // Update badge counter if not currently on notifications tab
+    if (currentTab !== 'notifications') {
+      const unread = notificationsList.filter(n => !n.read).length;
+      updateNotifBadge(unread);
+    }
+
+    renderNotifications();
+    showToast(notif.title + ' — ' + (notif.noreg ? `NoReg: ${notif.noreg}` : notif.message), notif.type === 'error' ? 'error' : 'success');
+  });
+}
+
+function setLogFilter(filter) {
+  logFilter = filter;
+  document.querySelectorAll('.console-tab').forEach(t => {
+    if (t.dataset.filter === filter) {
+      t.className = 'console-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-2.5 py-0.5 text-xs font-medium transition-all bg-background text-foreground shadow-sm shrink-0';
+    } else {
+      t.className = 'console-tab inline-flex items-center justify-center whitespace-nowrap rounded-md px-2.5 py-0.5 text-xs font-medium transition-all hover:text-foreground shrink-0';
+    }
+  });
+  renderLogs();
+}
+
+function renderLogs() {
+  const screen = document.getElementById('console-screen');
+  const query = (document.getElementById('log-search-input').value || '').toLowerCase();
+
+  const filtered = allLogs.filter(line => {
+    const low = line.toLowerCase();
+    if (query && !low.includes(query)) return false;
+
+    if (logFilter === 'info') return low.includes('"level":"info"') || low.includes('info');
+    if (logFilter === 'warn') return low.includes('"level":"warn"') || low.includes('warn');
+    if (logFilter === 'error') return low.includes('"level":"error"') || low.includes('[stderr]') || low.includes('error');
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    screen.innerHTML = '<div class="text-zinc-500">[System] No matching log entries.</div>';
+    return;
+  }
+
+  screen.innerHTML = filtered.map(line => {
+    let colorClass = 'text-zinc-300';
+    if (line.includes('"level":"error"') || line.includes('[stderr]') || line.includes('❌') || line.includes('gagal')) {
+      colorClass = 'text-rose-400';
+    } else if (line.includes('"level":"warn"') || line.includes('⚠️')) {
+      colorClass = 'text-amber-300';
+    } else if (line.includes('✅') || line.includes('berhasil') || line.includes('siap menerima') || line.includes('tersimpan di Google Sheets')) {
+      colorClass = 'text-emerald-400';
+    } else if (line.includes('[Dashboard]') || line.includes('[System]')) {
+      colorClass = 'text-blue-400';
+    }
+    return `<div class="py-0.5 ${colorClass}">${escapeHtml(line)}</div>`;
+  }).join('');
+
+  if (autoScrollEnabled) {
+    screen.scrollTop = screen.scrollHeight;
+  }
+}
+
+function toggleAutoScroll() {
+  autoScrollEnabled = !autoScrollEnabled;
+  const btn = document.getElementById('btn-autoscroll');
+  btn.textContent = `Scroll: ${autoScrollEnabled ? 'ON' : 'OFF'}`;
+  btn.className = autoScrollEnabled
+    ? 'h-8 px-2.5 text-xs rounded-md border border-border bg-secondary hover:bg-accent text-secondary-foreground transition-colors font-mono shrink-0'
+    : 'h-8 px-2.5 text-xs rounded-md border border-border bg-background text-muted-foreground transition-colors font-mono shrink-0';
+}
+
+function clearLogs() {
+  allLogs = [];
+  renderLogs();
+}
+
+function copyLogs() {
+  navigator.clipboard.writeText(allLogs.join('\n'))
+    .then(() => showToast('Logs copied to clipboard!'))
+    .catch(() => showToast('Failed to copy logs.', 'error'));
+}
+</script>
+</body>
+</html>
