@@ -66,73 +66,117 @@ async function downloadMediaSafely(
     }
   }
 
+  const msgObj = message as unknown as {
+    directPath?: string;
+    encFilehash?: string;
+    filehash?: string;
+    mediaKey?: string;
+    mediaKeyTimestamp?: number;
+    type?: string;
+    mimetype?: string;
+    filename?: string;
+    size?: number;
+    _data?: {
+      directPath?: string;
+      encFilehash?: string;
+      filehash?: string;
+      mediaKey?: string;
+      mediaKeyTimestamp?: number;
+      type?: string;
+      mimetype?: string;
+      filename?: string;
+      size?: number;
+    };
+  };
+
+  const params = {
+    directPath: msgObj.directPath || msgObj._data?.directPath,
+    encFilehash: msgObj.encFilehash || msgObj._data?.encFilehash,
+    filehash: msgObj.filehash || msgObj._data?.filehash,
+    mediaKey: msgObj.mediaKey || msgObj._data?.mediaKey,
+    mediaKeyTimestamp: msgObj.mediaKeyTimestamp || msgObj._data?.mediaKeyTimestamp,
+    type: msgObj.type || msgObj._data?.type || "image",
+    mimetype: msgObj.mimetype || msgObj._data?.mimetype || "image/jpeg",
+    filename: msgObj.filename || msgObj._data?.filename,
+    size: msgObj.size || msgObj._data?.size,
+  };
+
   try {
-    const raw = await page.evaluate(async (mid: string) => {
-      try {
-        const collections = window.require ? window.require("WAWebCollections") : (window as any).Store;
-        const msg = collections?.Msg?.get(mid) || (await collections?.Msg?.getMessagesById([mid]))?.messages?.[0];
-        if (!msg) return null;
+    const raw = await page.evaluate(
+      async (mid: string, p: typeof params) => {
+        try {
+          const collections = window.require ? window.require("WAWebCollections") : (window as any).Store;
+          const msg = collections?.Msg?.get(mid) || (await collections?.Msg?.getMessagesById([mid]))?.messages?.[0];
 
-        const mimetype = msg.mimetype || (msg.type === "image" ? "image/jpeg" : "application/octet-stream");
+          const mimetype = p.mimetype || msg?.mimetype || (p.type === "image" ? "image/jpeg" : "application/octet-stream");
 
-        // 1. Try renderableUrl (blob URL) if already cached in browser
-        if (msg.mediaData?.renderableUrl) {
-          try {
-            const res = await fetch(msg.mediaData.renderableUrl);
-            const ab = await res.arrayBuffer();
-            const data = await (window as any).WWebJS.arrayBufferToBase64Async(ab);
-            if (data) {
-              return { data, mimetype, filename: msg.filename, filesize: msg.size };
-            }
-          } catch {}
-        }
-
-        // 2. Try mediaBlob directly if available
-        if (msg.mediaData?.mediaBlob) {
-          try {
-            const blobData =
-              typeof msg.mediaData.mediaBlob.arrayBuffer === "function"
-                ? await msg.mediaData.mediaBlob.arrayBuffer()
-                : typeof msg.mediaData.mediaBlob.read === "function"
-                ? await msg.mediaData.mediaBlob.read()
-                : null;
-            if (blobData) {
-              const data = await (window as any).WWebJS.arrayBufferToBase64Async(blobData);
+          // 1. Try renderableUrl (blob URL) if already cached in browser
+          const rUrl = msg?.mediaData?.renderableUrl;
+          if (rUrl) {
+            try {
+              const res = await fetch(rUrl);
+              const ab = await res.arrayBuffer();
+              const data = await (window as any).WWebJS.arrayBufferToBase64Async(ab);
               if (data) {
-                return { data, mimetype, filename: msg.filename, filesize: msg.size };
+                return { data, mimetype, filename: p.filename || msg?.filename, filesize: p.size || msg?.size };
+              }
+            } catch {}
+          }
+
+          // 2. Direct downloadAndMaybeDecrypt with explicit mimetype
+          const directPath = p.directPath || msg?.directPath || msg?.mediaData?.directPath;
+          const mediaKey = p.mediaKey || msg?.mediaKey || msg?.mediaData?.mediaKey;
+          const encFilehash = p.encFilehash || msg?.encFilehash || msg?.mediaData?.encFilehash;
+          const filehash = p.filehash || msg?.filehash || msg?.mediaData?.filehash;
+          const mediaKeyTimestamp = p.mediaKeyTimestamp || msg?.mediaKeyTimestamp || msg?.mediaData?.mediaKeyTimestamp;
+          const type = p.type || msg?.type || msg?.mediaData?.type || "image";
+
+          const dm = window.require
+            ? window.require("WAWebDownloadManager")?.downloadManager || window.require("WAWebDownloadManager")
+            : (window as any).Store?.DownloadManager;
+
+          if (dm && directPath && mediaKey) {
+            const mockQpl = { addAnnotations: () => mockQpl, addPoint: () => mockQpl };
+            const decryptedMedia = await dm.downloadAndMaybeDecrypt({
+              directPath,
+              encFilehash,
+              filehash,
+              mediaKey,
+              mediaKeyTimestamp,
+              type,
+              mimetype,
+              signal: new AbortController().signal,
+              downloadQpl: mockQpl,
+            });
+
+            let arrayBuffer = decryptedMedia;
+            if (decryptedMedia && typeof decryptedMedia.arrayBuffer === "function") {
+              arrayBuffer = await decryptedMedia.arrayBuffer();
+            } else if (decryptedMedia instanceof Uint8Array) {
+              arrayBuffer = decryptedMedia.buffer;
+            } else if (decryptedMedia && decryptedMedia.data) {
+              arrayBuffer =
+                typeof decryptedMedia.data.arrayBuffer === "function"
+                  ? await decryptedMedia.data.arrayBuffer()
+                  : decryptedMedia.data;
+            }
+
+            if (arrayBuffer) {
+              const data = await (window as any).WWebJS.arrayBufferToBase64Async(arrayBuffer);
+              if (data) {
+                return { data, mimetype, filename: p.filename || msg?.filename, filesize: p.size || msg?.size };
               }
             }
-          } catch {}
+          }
+
+          return null;
+        } catch (err: any) {
+          return { error: String(err?.message || err) };
         }
-
-        // 3. Direct downloadAndMaybeDecrypt with explicit mimetype
-        const dm = window.require
-          ? window.require("WAWebDownloadManager")?.downloadManager
-          : (window as any).Store?.DownloadManager;
-
-        if (dm && msg.directPath) {
-          const mockQpl = { addAnnotations: () => mockQpl, addPoint: () => mockQpl };
-          const decryptedMedia = await dm.downloadAndMaybeDecrypt({
-            directPath: msg.directPath,
-            encFilehash: msg.encFilehash,
-            filehash: msg.filehash,
-            mediaKey: msg.mediaKey,
-            mediaKeyTimestamp: msg.mediaKeyTimestamp,
-            type: msg.type || "image",
-            mimetype: mimetype,
-            signal: new AbortController().signal,
-            downloadQpl: mockQpl,
-          });
-
-          const data = await (window as any).WWebJS.arrayBufferToBase64Async(decryptedMedia);
-          return { data, mimetype, filename: msg.filename, filesize: msg.size };
-        }
-
-        return null;
-      } catch (err: any) {
-        return { error: String(err?.message || err) };
-      }
-    }, (message as any).id?._serialized || targetMsgId);
+      },
+      (message as any).id?._serialized || targetMsgId,
+      params,
+    );
 
     if (raw && "data" in raw && raw.data) {
       // @ts-ignore
@@ -141,7 +185,7 @@ async function downloadMediaSafely(
     }
   } catch {}
 
-  // 4. Fallback to standard downloadMedia
+  // 3. Fallback to standard downloadMedia
   try {
     const std = await message.downloadMedia();
     if (std?.data) return std;
