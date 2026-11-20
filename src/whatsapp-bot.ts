@@ -1,4 +1,4 @@
-import { Client, LocalAuth, type Message, type MessageMedia } from "whatsapp-web.js";
+import { Client, LocalAuth, type Message, MessageMedia } from "whatsapp-web.js";
 import qrcode from "qrcode-terminal";
 import type { AppConfig } from "./config";
 import { isSenderAllowed } from "./config";
@@ -52,147 +52,161 @@ function resolveMessageId(message: Message): string {
   );
 }
 
-async function downloadMediaSafely(
-  client: Client,
-  message: Message,
-  targetMsgId: string,
-): Promise<MessageMedia | undefined> {
-  const page = (client as any).pupPage;
-  if (!page) {
-    try {
-      return await message.downloadMedia();
-    } catch {
-      return undefined;
-    }
-  }
+// Monkey-patch Message.prototype.downloadMedia to bypass whatsapp-web.js's FETCHING & mimetype bugs
+// @ts-ignore
+const MessageStructure = require("whatsapp-web.js/src/structures/Message");
+MessageStructure.prototype.downloadMedia = async function (this: any): Promise<MessageMedia | undefined> {
+  if (!this.hasMedia) return undefined;
 
-  const msgObj = message as unknown as {
-    directPath?: string;
-    encFilehash?: string;
-    filehash?: string;
-    mediaKey?: string;
-    mediaKeyTimestamp?: number;
-    type?: string;
-    mimetype?: string;
-    filename?: string;
-    size?: number;
-    _data?: {
-      directPath?: string;
-      encFilehash?: string;
-      filehash?: string;
-      mediaKey?: string;
-      mediaKeyTimestamp?: number;
-      type?: string;
-      mimetype?: string;
-      filename?: string;
-      size?: number;
-    };
+  const mediaParams = {
+    directPath: this.directPath || this._data?.directPath,
+    encFilehash: this.encFilehash || this._data?.encFilehash,
+    filehash: this.filehash || this._data?.filehash,
+    mediaKey: this.mediaKey || this._data?.mediaKey,
+    mediaKeyTimestamp: this.mediaKeyTimestamp || this._data?.mediaKeyTimestamp,
+    type: this.type || this._data?.type || "image",
+    mimetype: this.mimetype || this._data?.mimetype || "image/jpeg",
+    filename: this.filename || this._data?.filename,
+    size: this.size || this._data?.size,
   };
 
-  const params = {
-    directPath: msgObj.directPath || msgObj._data?.directPath,
-    encFilehash: msgObj.encFilehash || msgObj._data?.encFilehash,
-    filehash: msgObj.filehash || msgObj._data?.filehash,
-    mediaKey: msgObj.mediaKey || msgObj._data?.mediaKey,
-    mediaKeyTimestamp: msgObj.mediaKeyTimestamp || msgObj._data?.mediaKeyTimestamp,
-    type: msgObj.type || msgObj._data?.type || "image",
-    mimetype: msgObj.mimetype || msgObj._data?.mimetype || "image/jpeg",
-    filename: msgObj.filename || msgObj._data?.filename,
-    size: msgObj.size || msgObj._data?.size,
-  };
+  const messageId =
+    (this.id && typeof this.id._serialized === "string" && this.id._serialized) ||
+    (this.id &&
+      typeof this.id.id === "string" &&
+      `${this.id.fromMe ? "true" : "false"}_${this.id.remote || this.id.participant}_${this.id.id}`) ||
+    (this._data && typeof this._data.id === "object" && this._data.id?._serialized) ||
+    (this._data &&
+      typeof this._data.id === "object" &&
+      this._data.id?.id &&
+      `${this._data.id.fromMe ? "true" : "false"}_${this._data.id.remote}_${this._data.id.id}`) ||
+    (typeof this.id === "string" ? this.id : null);
+
+  const page = (this.client as any)?.pupPage;
+  if (!page) return undefined;
 
   try {
-    const raw = await page.evaluate(
-      async (mid: string, p: typeof params) => {
+    const result = await page.evaluate(
+      async (msgId: string | null, params: typeof mediaParams) => {
         try {
-          const collections = window.require ? window.require("WAWebCollections") : (window as any).Store;
-          const msg = collections?.Msg?.get(mid) || (await collections?.Msg?.getMessagesById([mid]))?.messages?.[0];
-
-          const mimetype = p.mimetype || msg?.mimetype || (p.type === "image" ? "image/jpeg" : "application/octet-stream");
-
-          // 1. Try renderableUrl (blob URL) if already cached in browser
-          const rUrl = msg?.mediaData?.renderableUrl;
-          if (rUrl) {
+          let msg = null;
+          if (msgId) {
             try {
-              const res = await fetch(rUrl);
-              const ab = await res.arrayBuffer();
-              const data = await (window as any).WWebJS.arrayBufferToBase64Async(ab);
-              if (data) {
-                return { data, mimetype, filename: p.filename || msg?.filename, filesize: p.size || msg?.size };
+              const MsgCollection = window.require("WAWebCollections").Msg;
+              const MsgKey = window.require("WAWebMsgKey");
+              if (MsgKey && typeof MsgKey.fromString === "function") {
+                try {
+                  msg = MsgCollection.get(MsgKey.fromString(msgId));
+                } catch {}
+              }
+              if (!msg) {
+                try {
+                  msg = MsgCollection.get(msgId);
+                } catch {}
+              }
+              if (!msg && MsgCollection.models) {
+                msg = MsgCollection.models.find(
+                  (m: any) =>
+                    m.id &&
+                    (m.id._serialized === msgId ||
+                      m.id.id === msgId ||
+                      String(m.id) === msgId),
+                );
               }
             } catch {}
           }
 
-          // 2. Direct downloadAndMaybeDecrypt with explicit mimetype
-          const directPath = p.directPath || msg?.directPath || msg?.mediaData?.directPath;
-          const mediaKey = p.mediaKey || msg?.mediaKey || msg?.mediaData?.mediaKey;
-          const encFilehash = p.encFilehash || msg?.encFilehash || msg?.mediaData?.encFilehash;
-          const filehash = p.filehash || msg?.filehash || msg?.mediaData?.filehash;
-          const mediaKeyTimestamp = p.mediaKeyTimestamp || msg?.mediaKeyTimestamp || msg?.mediaData?.mediaKeyTimestamp;
-          const type = p.type || msg?.type || msg?.mediaData?.type || "image";
-
-          const dm = window.require
-            ? window.require("WAWebDownloadManager")?.downloadManager || window.require("WAWebDownloadManager")
-            : (window as any).Store?.DownloadManager;
-
-          if (dm && directPath && mediaKey) {
-            const mockQpl = { addAnnotations: () => mockQpl, addPoint: () => mockQpl };
-            const decryptedMedia = await dm.downloadAndMaybeDecrypt({
-              directPath,
-              encFilehash,
-              filehash,
-              mediaKey,
-              mediaKeyTimestamp,
-              type,
-              mimetype,
-              signal: new AbortController().signal,
-              downloadQpl: mockQpl,
-            });
-
-            let arrayBuffer = decryptedMedia;
-            if (decryptedMedia && typeof decryptedMedia.arrayBuffer === "function") {
-              arrayBuffer = await decryptedMedia.arrayBuffer();
-            } else if (decryptedMedia instanceof Uint8Array) {
-              arrayBuffer = decryptedMedia.buffer;
-            } else if (decryptedMedia && decryptedMedia.data) {
-              arrayBuffer =
-                typeof decryptedMedia.data.arrayBuffer === "function"
-                  ? await decryptedMedia.data.arrayBuffer()
-                  : decryptedMedia.data;
-            }
-
-            if (arrayBuffer) {
-              const data = await (window as any).WWebJS.arrayBufferToBase64Async(arrayBuffer);
-              if (data) {
-                return { data, mimetype, filename: p.filename || msg?.filename, filesize: p.size || msg?.size };
+          // Path 1: Check if already rendered as a blob in DOM
+          if (msg?.mediaData?.renderableUrl) {
+            try {
+              const blobResp = await fetch(msg.mediaData.renderableUrl);
+              const arrayBuf = await blobResp.arrayBuffer();
+              const bytes = new Uint8Array(arrayBuf);
+              let binary = "";
+              for (let i = 0; i < bytes.length; i += 8192) {
+                binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 8192)));
               }
-            }
+              return {
+                data: window.btoa(binary),
+                mimetype: msg.mimetype || params.mimetype || "image/jpeg",
+                filename: msg.filename || params.filename,
+                filesize: bytes.length,
+              };
+            } catch {}
           }
 
-          return null;
-        } catch (err: any) {
-          return { error: String(err?.message || err) };
+          // Path 2: Direct Decryption with downloadManager
+          const directPath = params.directPath || msg?.directPath || msg?.mediaData?.directPath;
+          const encFilehash = params.encFilehash || msg?.encFilehash || msg?.mediaData?.encFilehash;
+          const filehash = params.filehash || msg?.filehash || msg?.mediaData?.filehash;
+          const mediaKey = params.mediaKey || msg?.mediaKey || msg?.mediaData?.mediaKey;
+          const mediaKeyTimestamp =
+            params.mediaKeyTimestamp || msg?.mediaKeyTimestamp || msg?.mediaData?.mediaKeyTimestamp;
+          const type = params.type || msg?.type || msg?.mediaData?.type || "image";
+
+          if (!directPath || !mediaKey) {
+            return { error: "Missing directPath or mediaKey" };
+          }
+
+          const dm =
+            (window.require("WAWebDownloadManager") &&
+              window.require("WAWebDownloadManager").downloadManager) ||
+            window.require("WAWebDownloadManager");
+
+          const decryptedMedia = await dm.downloadAndMaybeDecrypt({
+            directPath,
+            encFilehash,
+            filehash,
+            mediaKey,
+            mediaKeyTimestamp,
+            type,
+            mimetype: params.mimetype || (type === "image" ? "image/jpeg" : "application/octet-stream"),
+            signal: new AbortController().signal,
+            downloadQpl: { addAnnotations: () => {}, addPoint: () => {} },
+          });
+
+          let arrayBuffer = decryptedMedia;
+          if (decryptedMedia && typeof decryptedMedia.arrayBuffer === "function") {
+            arrayBuffer = await decryptedMedia.arrayBuffer();
+          } else if (decryptedMedia instanceof Uint8Array) {
+            arrayBuffer = decryptedMedia.buffer;
+          } else if (decryptedMedia && decryptedMedia.data) {
+            arrayBuffer =
+              typeof decryptedMedia.data.arrayBuffer === "function"
+                ? await decryptedMedia.data.arrayBuffer()
+                : decryptedMedia.data;
+          }
+
+          if (!arrayBuffer) return { error: "decryptedMedia buffer empty" };
+
+          const bytes = new Uint8Array(arrayBuffer);
+          let binary = "";
+          for (let i = 0; i < bytes.length; i += 8192) {
+            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 8192)));
+          }
+          const data = window.btoa(binary);
+
+          return {
+            data,
+            mimetype: params.mimetype || msg?.mimetype || "image/jpeg",
+            filename: params.filename || msg?.filename,
+            filesize: bytes.length,
+          };
+        } catch (e: any) {
+          return { error: String(e?.message || e) };
         }
       },
-      (message as any).id?._serialized || targetMsgId,
-      params,
+      messageId,
+      mediaParams,
     );
 
-    if (raw && "data" in raw && raw.data) {
-      // @ts-ignore
-      const MessageMediaClass = require("whatsapp-web.js/src/structures/MessageMedia");
-      return new MessageMediaClass(raw.mimetype, raw.data, raw.filename, raw.filesize);
+    if (result && "data" in result && result.data) {
+      return new MessageMedia(result.mimetype, result.data, result.filename, result.filesize);
     }
   } catch {}
 
-  // 3. Fallback to standard downloadMedia
-  try {
-    const std = await message.downloadMedia();
-    if (std?.data) return std;
-  } catch {}
-
   return undefined;
-}
+};
 
 export class WhatsAppBot {
   readonly status: BotStatus = { whatsapp: "starting", lastEventAt: new Date().toISOString() };
@@ -601,7 +615,7 @@ export class WhatsAppBot {
       let downloadError: string | undefined;
       for (let i = 0; i < 8 && !media; i++) {
         try {
-          media = await downloadMediaSafely(this.client, message, messageId);
+          media = await message.downloadMedia();
           if (media && media.data) break;
         } catch (err: any) {
           downloadError = err?.message || String(err);
