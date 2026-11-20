@@ -75,6 +75,10 @@ export class WhatsAppBot {
   ) {
     this.client = new Client({
       authStrategy: new LocalAuth({ dataPath: config.waAuthPath, clientId: "snap2sheet" }),
+      webVersionCache: {
+        type: "remote",
+        remotePath: "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html",
+      },
       puppeteer: {
         headless: true,
         ...(config.puppeteerExecutablePath
@@ -452,17 +456,21 @@ export class WhatsAppBot {
     const hasMedia = Boolean(message.hasMedia || message.type === "image" || message.type === "document");
     if (hasMedia) {
       let media: MessageMedia | undefined;
+      let downloadError: string | undefined;
       for (let i = 0; i < 6 && !media; i++) {
         try {
           media = await message.downloadMedia();
           if (media && media.data) break;
-        } catch {}
+        } catch (err: any) {
+          downloadError = err?.message || String(err);
+        }
         if (i < 5) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
       }
 
       if (!media?.data) {
         this.logger.warn("Media WhatsApp gagal diunduh atau belum selesai ditransfer.", {
           messageId,
+          ...(downloadError ? { error: downloadError } : {}),
         });
         return undefined;
       }
@@ -624,11 +632,5 @@ export class WhatsAppBot {
       throw new InputError(`Perintah tidak dikenal. Kirim ${this.config.commandPrefix}bantuan.`);
     }
     return undefined;
-  }
-
-  public async stop(): Promise<void> {
-    try {
-      await this.client.destroy();
-    } catch {}
   }
 }

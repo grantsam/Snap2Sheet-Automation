@@ -91,7 +91,11 @@ function isValidCustomerName(value: string): boolean {
 
 export function extractSentenceReport(text: string): StartPayload | undefined {
   if (!text) return undefined;
-  const cleaned = text.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
+  const cleaned = text
+    .replace(/[\r\n]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[,.;:]+$/, "")
+    .trim();
   if (!cleaned) return undefined;
 
   // 1. Bracketed or prefixed format: ( 3862 sri Maryati ) or minz ( ... )
