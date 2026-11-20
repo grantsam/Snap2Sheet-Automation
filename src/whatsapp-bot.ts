@@ -1,4 +1,6 @@
 import { Client, LocalAuth, type Message, MessageMedia } from "whatsapp-web.js";
+import fs from "node:fs";
+import path from "node:path";
 import qrcode from "qrcode-terminal";
 import type { AppConfig } from "./config";
 import { isSenderAllowed } from "./config";
@@ -53,13 +55,20 @@ function resolveMessageId(message: Message): string {
 }
 
 // Monkey-patch Message.prototype.downloadMedia to bypass whatsapp-web.js's FETCHING & mimetype bugs
+// Browser-side code loaded from plain .js file to avoid esbuild __name injection inside page.evaluate()
 // @ts-ignore
 const MessageStructure = require("whatsapp-web.js/src/structures/Message");
 const _originalDownloadMedia = MessageStructure.prototype.downloadMedia;
+// Load browser-side script as raw string (esbuild won't transform it)
+const _browserDecryptScript: string = fs.readFileSync(
+  path.resolve(__dirname, "media-decrypt.browser.js"),
+  "utf-8"
+);
 console.log("[PATCH] 🔧 Monkey-patch downloadMedia ter-load. Versi vanilla akan di-override.");
+
 MessageStructure.prototype.downloadMedia = async function (this: any): Promise<MessageMedia | undefined> {
   if (!this.hasMedia) return undefined;
-  console.log("[PATCH downloadMedia] ✅ Monkey-patch aktif, mengunduh media dengan mimetype fix...");
+  console.log("[PATCH downloadMedia] ✅ Monkey-patch aktif, mengunduh media...");
 
   const mediaParams = {
     directPath: this.directPath || this._data?.directPath,
@@ -89,116 +98,12 @@ MessageStructure.prototype.downloadMedia = async function (this: any): Promise<M
   if (!page) return undefined;
 
   try {
+    // Pass script as a string — avoids esbuild __name injection in page.evaluate()
     const result = await page.evaluate(
-      async (msgId: string | null, params: typeof mediaParams) => {
-        try {
-          let msg = null;
-          if (msgId) {
-            try {
-              const MsgCollection = window.require("WAWebCollections").Msg;
-              const MsgKey = window.require("WAWebMsgKey");
-              if (MsgKey && typeof MsgKey.fromString === "function") {
-                try {
-                  msg = MsgCollection.get(MsgKey.fromString(msgId));
-                } catch {}
-              }
-              if (!msg) {
-                try {
-                  msg = MsgCollection.get(msgId);
-                } catch {}
-              }
-              if (!msg && MsgCollection.models) {
-                msg = MsgCollection.models.find(
-                  (m: any) =>
-                    m.id &&
-                    (m.id._serialized === msgId ||
-                      m.id.id === msgId ||
-                      String(m.id) === msgId),
-                );
-              }
-            } catch {}
-          }
-
-          // Path 1: Check if already rendered as a blob in DOM
-          if (msg?.mediaData?.renderableUrl) {
-            try {
-              const blobResp = await fetch(msg.mediaData.renderableUrl);
-              const arrayBuf = await blobResp.arrayBuffer();
-              const bytes = new Uint8Array(arrayBuf);
-              let binary = "";
-              for (let i = 0; i < bytes.length; i += 8192) {
-                binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 8192)));
-              }
-              return {
-                data: window.btoa(binary),
-                mimetype: msg.mimetype || params.mimetype || "image/jpeg",
-                filename: msg.filename || params.filename,
-                filesize: bytes.length,
-              };
-            } catch {}
-          }
-
-          // Path 2: Direct Decryption with downloadManager
-          const directPath = params.directPath || msg?.directPath || msg?.mediaData?.directPath;
-          const encFilehash = params.encFilehash || msg?.encFilehash || msg?.mediaData?.encFilehash;
-          const filehash = params.filehash || msg?.filehash || msg?.mediaData?.filehash;
-          const mediaKey = params.mediaKey || msg?.mediaKey || msg?.mediaData?.mediaKey;
-          const mediaKeyTimestamp =
-            params.mediaKeyTimestamp || msg?.mediaKeyTimestamp || msg?.mediaData?.mediaKeyTimestamp;
-          const type = params.type || msg?.type || msg?.mediaData?.type || "image";
-
-          if (!directPath || !mediaKey) {
-            return { error: "Missing directPath or mediaKey" };
-          }
-
-          const dm =
-            (window.require("WAWebDownloadManager") &&
-              window.require("WAWebDownloadManager").downloadManager) ||
-            window.require("WAWebDownloadManager");
-
-          const decryptedMedia = await dm.downloadAndMaybeDecrypt({
-            directPath,
-            encFilehash,
-            filehash,
-            mediaKey,
-            mediaKeyTimestamp,
-            type,
-            mimetype: params.mimetype || (type === "image" ? "image/jpeg" : "application/octet-stream"),
-            signal: new AbortController().signal,
-            downloadQpl: { addAnnotations: () => {}, addPoint: () => {} },
-          });
-
-          let arrayBuffer = decryptedMedia;
-          if (decryptedMedia && typeof decryptedMedia.arrayBuffer === "function") {
-            arrayBuffer = await decryptedMedia.arrayBuffer();
-          } else if (decryptedMedia instanceof Uint8Array) {
-            arrayBuffer = decryptedMedia.buffer;
-          } else if (decryptedMedia && decryptedMedia.data) {
-            arrayBuffer =
-              typeof decryptedMedia.data.arrayBuffer === "function"
-                ? await decryptedMedia.data.arrayBuffer()
-                : decryptedMedia.data;
-          }
-
-          if (!arrayBuffer) return { error: "decryptedMedia buffer empty" };
-
-          const bytes = new Uint8Array(arrayBuffer);
-          let binary = "";
-          for (let i = 0; i < bytes.length; i += 8192) {
-            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 8192)));
-          }
-          const data = window.btoa(binary);
-
-          return {
-            data,
-            mimetype: params.mimetype || msg?.mimetype || "image/jpeg",
-            filename: params.filename || msg?.filename,
-            filesize: bytes.length,
-          };
-        } catch (e: any) {
-          return { error: String(e?.message || e) };
-        }
-      },
+      new Function("msgId", "params", `return (${_browserDecryptScript})(msgId, params)`) as (
+        msgId: string | null,
+        params: typeof mediaParams,
+      ) => Promise<{ data: string; mimetype: string; filename?: string; filesize?: number } | { error: string } | null>,
       messageId,
       mediaParams,
     );
@@ -213,7 +118,7 @@ MessageStructure.prototype.downloadMedia = async function (this: any): Promise<M
     console.log(`[PATCH downloadMedia] ⚠️ Patch error: ${patchErr?.message || patchErr}`);
   }
 
-  // Fallback: coba method original (vanilla whatsapp-web.js)
+  // Fallback: original whatsapp-web.js downloadMedia
   if (typeof _originalDownloadMedia === "function") {
     try {
       console.log("[PATCH downloadMedia] 🔄 Fallback ke original downloadMedia...");
