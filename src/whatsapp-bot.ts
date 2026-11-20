@@ -57,13 +57,14 @@ async function downloadMediaSafely(
   message: Message,
   targetMsgId: string,
 ): Promise<MessageMedia | undefined> {
-  try {
-    const std = await message.downloadMedia();
-    if (std?.data) return std;
-  } catch {}
-
   const page = (client as any).pupPage;
-  if (!page) return undefined;
+  if (!page) {
+    try {
+      return await message.downloadMedia();
+    } catch {
+      return undefined;
+    }
+  }
 
   try {
     const raw = await page.evaluate(async (mid: string) => {
@@ -72,36 +73,80 @@ async function downloadMediaSafely(
         const msg = collections?.Msg?.get(mid) || (await collections?.Msg?.getMessagesById([mid]))?.messages?.[0];
         if (!msg) return null;
 
+        const mimetype = msg.mimetype || (msg.type === "image" ? "image/jpeg" : "application/octet-stream");
+
+        // 1. Try renderableUrl (blob URL) if already cached in browser
+        if (msg.mediaData?.renderableUrl) {
+          try {
+            const res = await fetch(msg.mediaData.renderableUrl);
+            const ab = await res.arrayBuffer();
+            const data = await (window as any).WWebJS.arrayBufferToBase64Async(ab);
+            if (data) {
+              return { data, mimetype, filename: msg.filename, filesize: msg.size };
+            }
+          } catch {}
+        }
+
+        // 2. Try mediaBlob directly if available
+        if (msg.mediaData?.mediaBlob) {
+          try {
+            const blobData =
+              typeof msg.mediaData.mediaBlob.arrayBuffer === "function"
+                ? await msg.mediaData.mediaBlob.arrayBuffer()
+                : typeof msg.mediaData.mediaBlob.read === "function"
+                ? await msg.mediaData.mediaBlob.read()
+                : null;
+            if (blobData) {
+              const data = await (window as any).WWebJS.arrayBufferToBase64Async(blobData);
+              if (data) {
+                return { data, mimetype, filename: msg.filename, filesize: msg.size };
+              }
+            }
+          } catch {}
+        }
+
+        // 3. Direct downloadAndMaybeDecrypt with explicit mimetype
         const dm = window.require
           ? window.require("WAWebDownloadManager")?.downloadManager
           : (window as any).Store?.DownloadManager;
-        if (!dm || !msg.directPath) return null;
 
-        const mockQpl = { addAnnotations: () => mockQpl, addPoint: () => mockQpl };
-        const decryptedMedia = await dm.downloadAndMaybeDecrypt({
-          directPath: msg.directPath,
-          encFilehash: msg.encFilehash,
-          filehash: msg.filehash,
-          mediaKey: msg.mediaKey,
-          mediaKeyTimestamp: msg.mediaKeyTimestamp,
-          type: msg.type,
-          signal: new AbortController().signal,
-          downloadQpl: mockQpl,
-        });
+        if (dm && msg.directPath) {
+          const mockQpl = { addAnnotations: () => mockQpl, addPoint: () => mockQpl };
+          const decryptedMedia = await dm.downloadAndMaybeDecrypt({
+            directPath: msg.directPath,
+            encFilehash: msg.encFilehash,
+            filehash: msg.filehash,
+            mediaKey: msg.mediaKey,
+            mediaKeyTimestamp: msg.mediaKeyTimestamp,
+            type: msg.type || "image",
+            mimetype: mimetype,
+            signal: new AbortController().signal,
+            downloadQpl: mockQpl,
+          });
 
-        const data = await (window as any).WWebJS.arrayBufferToBase64Async(decryptedMedia);
-        return { data, mimetype: msg.mimetype, filename: msg.filename, filesize: msg.size };
-      } catch {
+          const data = await (window as any).WWebJS.arrayBufferToBase64Async(decryptedMedia);
+          return { data, mimetype, filename: msg.filename, filesize: msg.size };
+        }
+
         return null;
+      } catch (err: any) {
+        return { error: String(err?.message || err) };
       }
     }, (message as any).id?._serialized || targetMsgId);
 
-    if (raw && raw.data) {
+    if (raw && "data" in raw && raw.data) {
       // @ts-ignore
       const MessageMediaClass = require("whatsapp-web.js/src/structures/MessageMedia");
       return new MessageMediaClass(raw.mimetype, raw.data, raw.filename, raw.filesize);
     }
   } catch {}
+
+  // 4. Fallback to standard downloadMedia
+  try {
+    const std = await message.downloadMedia();
+    if (std?.data) return std;
+  } catch {}
+
   return undefined;
 }
 
