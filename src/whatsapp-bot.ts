@@ -52,6 +52,59 @@ function resolveMessageId(message: Message): string {
   );
 }
 
+async function downloadMediaSafely(
+  client: Client,
+  message: Message,
+  targetMsgId: string,
+): Promise<MessageMedia | undefined> {
+  try {
+    const std = await message.downloadMedia();
+    if (std?.data) return std;
+  } catch {}
+
+  const page = (client as any).pupPage;
+  if (!page) return undefined;
+
+  try {
+    const raw = await page.evaluate(async (mid: string) => {
+      try {
+        const collections = window.require ? window.require("WAWebCollections") : (window as any).Store;
+        const msg = collections?.Msg?.get(mid) || (await collections?.Msg?.getMessagesById([mid]))?.messages?.[0];
+        if (!msg) return null;
+
+        const dm = window.require
+          ? window.require("WAWebDownloadManager")?.downloadManager
+          : (window as any).Store?.DownloadManager;
+        if (!dm || !msg.directPath) return null;
+
+        const mockQpl = { addAnnotations: () => mockQpl, addPoint: () => mockQpl };
+        const decryptedMedia = await dm.downloadAndMaybeDecrypt({
+          directPath: msg.directPath,
+          encFilehash: msg.encFilehash,
+          filehash: msg.filehash,
+          mediaKey: msg.mediaKey,
+          mediaKeyTimestamp: msg.mediaKeyTimestamp,
+          type: msg.type,
+          signal: new AbortController().signal,
+          downloadQpl: mockQpl,
+        });
+
+        const data = await (window as any).WWebJS.arrayBufferToBase64Async(decryptedMedia);
+        return { data, mimetype: msg.mimetype, filename: msg.filename, filesize: msg.size };
+      } catch {
+        return null;
+      }
+    }, (message as any).id?._serialized || targetMsgId);
+
+    if (raw && raw.data) {
+      // @ts-ignore
+      const MessageMediaClass = require("whatsapp-web.js/src/structures/MessageMedia");
+      return new MessageMediaClass(raw.mimetype, raw.data, raw.filename, raw.filesize);
+    }
+  } catch {}
+  return undefined;
+}
+
 export class WhatsAppBot {
   readonly status: BotStatus = { whatsapp: "starting", lastEventAt: new Date().toISOString() };
   private readonly client: Client;
@@ -457,14 +510,14 @@ export class WhatsAppBot {
     if (hasMedia) {
       let media: MessageMedia | undefined;
       let downloadError: string | undefined;
-      for (let i = 0; i < 10 && !media; i++) {
+      for (let i = 0; i < 8 && !media; i++) {
         try {
-          media = await message.downloadMedia();
+          media = await downloadMediaSafely(this.client, message, messageId);
           if (media && media.data) break;
         } catch (err: any) {
           downloadError = err?.message || String(err);
         }
-        if (i < 9) await new Promise((r) => setTimeout(r, 1000 + i * 400));
+        if (i < 7) await new Promise((r) => setTimeout(r, 800 + i * 300));
       }
 
       if (!media?.data) {
