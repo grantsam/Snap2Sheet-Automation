@@ -286,7 +286,7 @@ export class WhatsAppBot {
       this.logger.info(
         `🔎 Menganalisis: "${body?.slice(0, 40) || "[Foto / Media]"}" (media: ${msg.hasMedia})`,
       );
-      await this.routeMessage(msg);
+      await this.routeMessage(msg, true);
       processed++;
     }
 
@@ -337,7 +337,7 @@ export class WhatsAppBot {
     });
   }
 
-  private async routeMessage(message: Message): Promise<void> {
+  private async routeMessage(message: Message, isSync = false): Promise<void> {
     try {
       if (message.from === "status@broadcast") return;
       // Prevent infinite loop if the message was sent by the bot's own automated response
@@ -417,8 +417,20 @@ export class WhatsAppBot {
         fromMe: message.fromMe,
       });
 
+      // Calculate message age (seconds) to prevent re-executing old commands from chat history
+      const messageAgeSeconds = Math.abs(Date.now() / 1000 - (message.timestamp || Date.now() / 1000));
+      const isRecent = messageAgeSeconds < 180; // only process commands sent within the last 3 minutes
+
       // If user is asking for the group ID
       if (isIdCommand) {
+        if (isSync || !isRecent) {
+          return;
+        }
+
+        const messageId = resolveMessageId(message);
+        if (await this.store.hasProcessedMessage(messageId)) return;
+        await this.store.markMessageProcessed(messageId);
+
         this.logger.info("⚙️ Perintah !idgrup diminta oleh:", { senderId });
         if (!isGroup) {
           await this.client.sendMessage(
@@ -435,6 +447,7 @@ export class WhatsAppBot {
       }
 
       if (bodyLower === "!sinkron" || bodyLower === `${prefix}sinkron` || bodyLower === "!sync") {
+        if (isSync || !isRecent) return;
         try {
           const targetId = this.config.targetGroupId || chatId;
           const targetChat = await this.client.getChatById(targetId);
