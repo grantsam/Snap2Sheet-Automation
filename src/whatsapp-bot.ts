@@ -55,8 +55,11 @@ function resolveMessageId(message: Message): string {
 // Monkey-patch Message.prototype.downloadMedia to bypass whatsapp-web.js's FETCHING & mimetype bugs
 // @ts-ignore
 const MessageStructure = require("whatsapp-web.js/src/structures/Message");
+const _originalDownloadMedia = MessageStructure.prototype.downloadMedia;
+console.log("[PATCH] 🔧 Monkey-patch downloadMedia ter-load. Versi vanilla akan di-override.");
 MessageStructure.prototype.downloadMedia = async function (this: any): Promise<MessageMedia | undefined> {
   if (!this.hasMedia) return undefined;
+  console.log("[PATCH downloadMedia] ✅ Monkey-patch aktif, mengunduh media dengan mimetype fix...");
 
   const mediaParams = {
     directPath: this.directPath || this._data?.directPath,
@@ -203,7 +206,21 @@ MessageStructure.prototype.downloadMedia = async function (this: any): Promise<M
     if (result && "data" in result && result.data) {
       return new MessageMedia(result.mimetype, result.data, result.filename, result.filesize);
     }
-  } catch {}
+    if (result && "error" in result) {
+      console.log(`[PATCH downloadMedia] ⚠️ CDN decrypt gagal: ${result.error}`);
+    }
+  } catch (patchErr: any) {
+    console.log(`[PATCH downloadMedia] ⚠️ Patch error: ${patchErr?.message || patchErr}`);
+  }
+
+  // Fallback: coba method original (vanilla whatsapp-web.js)
+  if (typeof _originalDownloadMedia === "function") {
+    try {
+      console.log("[PATCH downloadMedia] 🔄 Fallback ke original downloadMedia...");
+      const fallback = await _originalDownloadMedia.call(this);
+      if (fallback?.data) return fallback;
+    } catch {}
+  }
 
   return undefined;
 };
