@@ -76,8 +76,8 @@ export class WhatsAppBot {
     this.client = new Client({
       authStrategy: new LocalAuth({ dataPath: config.waAuthPath, clientId: "snap2sheet" }),
       webVersionCache: {
-        type: "remote",
-        remotePath: "https://raw.githubusercontent.com/wppconnect-team/wa-version/main/html/{version}.html",
+        type: "local",
+        path: "./.wwebjs_cache/",
       },
       puppeteer: {
         headless: true,
@@ -285,8 +285,8 @@ export class WhatsAppBot {
       let groupName = "";
       if (isGroup) {
         try {
-          const chat = await message.getChat();
-          groupName = chat?.name || "";
+          const chat = (await this.client.getChatById(chatId).catch(() => null)) || (await message.getChat().catch(() => null));
+          groupName = chat?.name || (chat as any)?.formattedTitle || "";
         } catch {
           groupName =
             (message as unknown as { _data?: { chat?: { name?: string } } })._data?.chat
@@ -457,14 +457,14 @@ export class WhatsAppBot {
     if (hasMedia) {
       let media: MessageMedia | undefined;
       let downloadError: string | undefined;
-      for (let i = 0; i < 6 && !media; i++) {
+      for (let i = 0; i < 10 && !media; i++) {
         try {
           media = await message.downloadMedia();
           if (media && media.data) break;
         } catch (err: any) {
           downloadError = err?.message || String(err);
         }
-        if (i < 5) await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+        if (i < 9) await new Promise((r) => setTimeout(r, 1000 + i * 400));
       }
 
       if (!media?.data) {
